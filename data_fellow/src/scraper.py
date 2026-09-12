@@ -1,12 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-
+from src.config import URLS
 from src.models import NewsArticle
 
-BASE_URL = "https://news.google.com/"
 
-def fetch_news(url: str) ->BeautifulSoup:
+
+def fetch_news(category: str) ->BeautifulSoup:
+    url = URLS[category]
+
     response = requests.get(
         url,
         timeout=10,
@@ -25,7 +27,7 @@ def fetch_news(url: str) ->BeautifulSoup:
 
     return BeautifulSoup(response.text, "html.parser")
 
-def extract_links(soup):
+def extract_links(soup: BeautifulSoup, category: str):
     news_items = []
 
     links = soup.find_all("a")
@@ -43,10 +45,11 @@ def extract_links(soup):
         if not href.startswith("./read/"):
             continue
 
-        full_url =urljoin(BASE_URL, href)
+        full_url =urljoin(URLS["base"], href)
 
         news_items.append(
             {
+                "category" : category,
                 "title": title,
                 "url" : full_url,
             }

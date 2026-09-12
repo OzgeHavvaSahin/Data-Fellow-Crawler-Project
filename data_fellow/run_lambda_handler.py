@@ -2,14 +2,17 @@ from src.scraper import fetch_news, extract_links
 
 
 def main():
-    url = "https://news.google.com/topics/CAAqIggKIhxDQkFTRHdvSkwyMHZNREY2Ym1OZkVnSjBjaWdBUAE?hl=tr&gl=TR&ceid=TR%3Atr"
-    soup = fetch_news(url)
+    category = "turkey"
 
-    news_items = extract_links(soup)
+    soup = fetch_news(category)
+
+    news_items = extract_links(soup, category)
 
     print(f"Found {len(news_items)} news items")
 
-    for item in news_items[:10]:
+    for rank, item in enumerate(news_items[:10], start=1):
+        print("CATEGORY:", item["category"])
+        print("RANK:", rank)
         print("TITLE:", item["title"])
         print("URL:", item["url"])
         print("-" * 50)
