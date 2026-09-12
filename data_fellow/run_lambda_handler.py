@@ -1,28 +1,17 @@
-from src.scraper import fetch_news
+from src.scraper import fetch_news, extract_links
 
 
 def main():
-    url = "https://news.google.com/"
+    url = "https://news.google.com/topics/CAAqIggKIhxDQkFTRHdvSkwyMHZNREY2Ym1OZkVnSjBjaWdBUAE?hl=tr&gl=TR&ceid=TR%3Atr"
     soup = fetch_news(url)
 
-    # articles = soup.find_all("article")
+    news_items = extract_links(soup)
 
-    # print(f"Found {len(articles)} articles")
+    print(f"Found {len(news_items)} news items")
 
-    # for article in articles[:5]:
-    #     print(article.get_text(" ", strip=True))
-    #     print("-" * 50)
-
-    links = soup.find_all("a")
-
-    print(f"Found {len(links)} links")
-
-    for link in links[:30]:
-        text = link.get_text(" ", strip=True)
-        href = link.get("href")
-
-        print("TEXT:", text)
-        print("HREF:", href)
+    for item in news_items[:10]:
+        print("TITLE:", item["title"])
+        print("URL:", item["url"])
         print("-" * 50)
 
 if __name__ == "__main__":
