@@ -32,7 +32,7 @@ def extract_links(soup: BeautifulSoup, category: str):
 
     links = soup.find_all("a")
 
-    for link in links:
+    for rank,link  in enumerate(links, start=1):
         title = link.get_text(" " , strip=True)
         href = link.get("href")
 
@@ -45,6 +45,14 @@ def extract_links(soup: BeautifulSoup, category: str):
         if not href.startswith("./read/"):
             continue
 
+        card = link.parent
+
+        source_tag = card.find("div", class_="vr1PYe")
+        time_tag = card.find("time")
+
+        source = source_tag.get_text(strip=True) if source_tag else None
+        published_at = time_tag.get("datetime") if time_tag else None   
+            
         full_url =urljoin(URLS["base"], href)
 
         news_items.append(
@@ -52,6 +60,9 @@ def extract_links(soup: BeautifulSoup, category: str):
                 "category" : category,
                 "title": title,
                 "url" : full_url,
+                "rank" : rank,
+                "published_at" : published_at,
+                "source" : source
             }
         )
     return news_items       

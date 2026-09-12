@@ -1,21 +1,23 @@
-from src.scraper import fetch_news, extract_links
+from src.lambda_func import lambda_handler
 
 
 def main():
-    category = "turkey"
+    result = lambda_handler(None, None)
 
-    soup = fetch_news(category)
+    print("STATUS:", result["statusCode"])
+    print("CATEGORY:", result["category"])
+    print("COUNT:", result["count"])
 
-    news_items = extract_links(soup, category)
+    print("-" * 50)
 
-    print(f"Found {len(news_items)} news items")
-
-    for rank, item in enumerate(news_items[:10], start=1):
-        print("CATEGORY:", item["category"])
-        print("RANK:", rank)
-        print("TITLE:", item["title"])
-        print("URL:", item["url"])
+    for article in result["articles"]:
+        print("RANK:", article["rank"])
+        print("TITLE:", article["title"])
+        print("SOURCE:", article["source"])
+        print("PUBLISHED AT:", article["published_at"])
+        print("URL:", article["url"])
         print("-" * 50)
+
 
 if __name__ == "__main__":
     main()
