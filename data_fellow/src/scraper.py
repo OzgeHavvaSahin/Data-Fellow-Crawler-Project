@@ -32,7 +32,9 @@ def extract_links(soup: BeautifulSoup, category: str):
 
     links = soup.find_all("a")
 
-    for rank,link  in enumerate(links, start=1):
+    rank= 1
+
+    for link  in links:
         title = link.get_text(" " , strip=True)
         href = link.get("href")
 
@@ -65,4 +67,5 @@ def extract_links(soup: BeautifulSoup, category: str):
                 "source" : source
             }
         )
+        rank += 1
     return news_items       
