@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class NewsArticle:
     url: str
     title: str
-    description: str
+    description: str | None
     source: str
     published_at: str
     rank: str
