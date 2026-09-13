@@ -9,3 +9,7 @@ URLS = {
     "entertainment": "https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FuUnlHZ0pVVWlnQVAB?hl=tr&gl=TR&ceid=TR%3Atr",
     "science_and_tech": "https://news.google.com/topics/CAAqKAgKIiJDQkFTRXdvSkwyMHZNR1ptZHpWbUVnSjBjaG9DVkZJb0FBUAE?hl=tr&gl=TR&ceid=TR%3Atr",
 }
+
+S3_BUCKET = "data-fellow-crawler-project"
+
+AWS_REGION = "eu-north-1"
