@@ -10,8 +10,8 @@ def lambda_handler(event, context):
         if category == "base":
             continue
 
-        soup = fetch_news(category)
-        news_items = extract_links(soup, category)
+        root = fetch_news(category)
+        news_items = extract_links(root, category)
 
         first_10_articles = news_items[:10]
 

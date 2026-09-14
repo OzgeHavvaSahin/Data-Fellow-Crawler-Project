@@ -5,7 +5,6 @@ def main():
     result = lambda_handler(None, None)
 
     print("STATUS:", result["statusCode"])
-    print("-" * 50)
 
     for item in result["results"]:
         print("CATEGORY:", item["category"])

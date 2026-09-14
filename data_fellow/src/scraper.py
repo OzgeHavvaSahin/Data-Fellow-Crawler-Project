@@ -6,7 +6,7 @@ from src.models import NewsArticle
 import xml.etree.ElementTree as ET
 
 
-def fetch_news(category: str) ->BeautifulSoup:
+def fetch_news(category: str):
     url = URLS[category]
 
     response = requests.get(
@@ -25,47 +25,33 @@ def fetch_news(category: str) ->BeautifulSoup:
 
     response.raise_for_status()
 
-    return BeautifulSoup(response.text, "html.parser")
+    return ET.fromstring(response.content)
 
-def extract_links(soup: BeautifulSoup, category: str):
+def extract_links(root, category: str):
     news_items = []
 
-    links = soup.find_all("a")
+    items = root.findall(".//item")
 
-    rank= 1
+    print("TOTAL ITEMS:",len(items))
 
-    for link  in links:
-        title = link.get_text(" " , strip=True)
-        href = link.get("href")
+    for rank, item in enumerate(items[:10], start=1):
+        title = item.findtext("title")
+        url = item.findtext("link")
+        published_at = item.findtext("pubDate")
 
-        if not title:
-            continue
-
-        if not href:
-            continue
-
-        if not href.startswith("./read/"):
-            continue
-
-        card = link.parent
-
-        source_tag = card.find("div", class_="vr1PYe")
-        time_tag = card.find("time")
-
-        source = source_tag.get_text(strip=True) if source_tag else None
-        published_at = time_tag.get("datetime") if time_tag else None   
-            
-        full_url =urljoin(URLS["base"], href)
+        source_tag = item.find("source")
+        source = source_tag.text if source_tag is not None else None
 
         news_items.append(
             {
-                "category" : category,
+                "category": category,
+                "rank": rank,
                 "title": title,
-                "url" : full_url,
-                "rank" : rank,
-                "published_at" : published_at,
-                "source" : source
+                "description": None,
+                "source": source,
+                "published_at": published_at,
+                "url": url,
             }
         )
-        rank += 1
-    return news_items       
+
+    return news_items
