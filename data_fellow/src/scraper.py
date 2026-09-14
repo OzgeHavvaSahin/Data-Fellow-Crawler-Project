@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from src.config import URLS
 from src.models import NewsArticle
-
+import xml.etree.ElementTree as ET
 
 
 def fetch_news(category: str) ->BeautifulSoup:
