@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from src.config import URLS
 from src.models import NewsArticle
