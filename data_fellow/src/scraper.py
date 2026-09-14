@@ -32,7 +32,7 @@ def extract_links(root, category: str):
 
     print("TOTAL ITEMS:",len(items))
 
-    for rank, item in enumerate(items[:10], start=1):
+    for rank, item in enumerate(items, start=1):
         title = item.findtext("title")
         url = item.findtext("link")
         published_at = item.findtext("pubDate")

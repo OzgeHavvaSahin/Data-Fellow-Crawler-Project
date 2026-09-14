@@ -13,17 +13,16 @@ def lambda_handler(event, context):
         root = fetch_news(category)
         news_items = extract_links(root, category)
 
-        first_10_articles = news_items[:10]
 
         s3_key = save_to_s3(
-            first_10_articles,
+            news_items,
             category
         )
 
         results.append(
             {
                 "category": category,
-                "count": len(first_10_articles),
+                "count": len(news_items),
                 "s3_key": s3_key,
             }
         )
