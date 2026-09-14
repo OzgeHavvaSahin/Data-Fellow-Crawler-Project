@@ -1,5 +1,4 @@
 import requests
-from urllib.parse import urljoin
 from src.config import URLS
 from src.models import NewsArticle
 import xml.etree.ElementTree as ET
