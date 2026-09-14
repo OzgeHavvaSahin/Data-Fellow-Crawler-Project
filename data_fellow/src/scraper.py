@@ -30,8 +30,6 @@ def extract_links(root, category: str):
 
     items = root.findall(".//item")
 
-    print("TOTAL ITEMS:",len(items))
-
     for rank, item in enumerate(items, start=1):
         title = item.findtext("title")
         url = item.findtext("link")
