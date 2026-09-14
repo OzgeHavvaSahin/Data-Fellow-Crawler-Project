@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+lambda_layer/python/
+lambda_layer/*.zip
