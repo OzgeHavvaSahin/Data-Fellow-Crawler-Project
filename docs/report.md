@@ -45,3 +45,13 @@ def fetch_news(category: str):
 
     return ET.fromstring(response.content)
 ```
+Burada `URLS[category]` ile işlenecek kategoriye ait RSS adresi alınmaktadır.
+`requests.get()` fonksiyonu ile Google News RSS kaynağına HTTP isteği gönderilir. 
+
+İstek başarılı olduğunda dönen veri XML formatındadır. Bu veri:,
+
+```python
+ET.fromstring(response.content)
+```
+kullanılarak parse edilir ve Python içerisinde işlenebilir bir XML ağacına dönüştürülür.
+
