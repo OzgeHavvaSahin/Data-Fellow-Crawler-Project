@@ -2,7 +2,6 @@ from src.scraper import fetch_news, extract_links
 from src.storage import save_to_s3
 from src.config import URLS
 
-
 def lambda_handler(event, context):
     results = []
 
