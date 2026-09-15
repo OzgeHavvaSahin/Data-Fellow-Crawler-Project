@@ -219,3 +219,6 @@ __marimo__/
 
 lambda_layer/python/
 lambda_layer/*.zip
+
+mysql_layer/python/
+mysql_layer/*.zip
