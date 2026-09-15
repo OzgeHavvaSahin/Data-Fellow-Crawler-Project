@@ -12,7 +12,7 @@ Web scraping, internet sitelerinde yer alan verilerin yazılım aracılığıyla
 
 Cloud computing, sunucu, depolama, veritabanı ve ağ gibi bilişim kaynaklarının internet üzerinden servis olarak kullanılmasını sağlayan bir yaklaşımdır.
 
-## Local Crawler Nasıl Geliştirildi?
+## 4.Local Crawler Nasıl Geliştirildi?
 
 Cloud ortamına geçmeden önce ilk olarak haber verilerini local ortamda toplayabilen bir crawler geliştirildi. Buradaki amaç, veri kaynağından haberlerin doğru şekilde alınabildiğini ve ihtiyaç duyulan alanların ayrıştırılabildiğini doğrulamaktı.
 
@@ -32,4 +32,13 @@ response = requests.get(
 )
 
 response.raise_for_status()
+```
+Burada requests.get() fonksiyonu ile hedef URL'ye bir HTTP isteği gönderilmektedir. timeout=10 parametresi, bağlantının çok uzun süre beklemesini önlemek için kullanılmıştır. User-Agent başlığı ise isteğin bir tarayıcıdan geliyormuş gibi görünmesini sağlar.
 
+İstek başarılı olduktan sonra elde edilen HTML içeriği BeautifulSoup ile ayrıştırıldı:
+
+```python
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(response.text, "html.parser")
+```
