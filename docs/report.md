@@ -427,3 +427,15 @@ ORDER BY scraped_at DESC;
 ```
 
 Bu sorgu yalnızca `business` kategorisine ait haberleri listeler. Aynı yapı diğer kategoriler için de kullanılabilir.
+
+## Sonuç
+
+Bu proje ile Google News RSS kaynaklarından haber verilerini otomatik olarak toplayan, verileri Amazon S3 üzerinde saklayan ve Amazon RDS MySQL veritabanına aktaran uçtan uca bir AWS mimarisi oluşturulmuştur.
+
+Sistemin genel çalışma akışı aşağıdaki flowchart ile özetlenmiştir:
+
+![](./diagrams/Flowchart.png)
+
+Proje sürecinde `AWS Lambda`, `Amazon S3`, `Amazon RDS`, `EventBridge Scheduler`, `VPC`, `IAM`, `CloudWatch` ve `S3 Gateway VPC Endpoint` gibi AWS servisleri birlikte kullanılmıştır.
+
+Bu proje sayesinde cloud computing, serverless mimari, veri toplama, veri depolama, ilişkisel veritabanı ve AWS servisleri arasındaki entegrasyon konularında uygulamalı deneyim kazanılmıştır.
