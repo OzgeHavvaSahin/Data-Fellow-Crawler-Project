@@ -223,3 +223,45 @@ Bu fonksiyon içerisinde önce o anki UTC zaman bilgisi alınır. Daha sonra kat
 Lambda fonksiyonunun S3'e veri yazabilmesi için gerekli IAM izinleri execution role üzerinden tanımlandı.
 
 Amazon S3 içerisinde oluşturulan yapı AWS Console üzerinden kategori ve tarih bazlı olarak görüntülenebilmektedir.
+
+![](./diagrams/S3.png)
+
+## Amazon RDS MySQL Entegrasyonu
+
+Haber verilerinin yalnızca dosya olarak saklanması yerine sorgulanabilir ve ilişkisel bir yapıda tutulabilmesi için `Amazon RDS for MySQL` kullanıldı. RDS üzerinde `data_fellow` isimli veritabanı oluşturuldu.
+
+RDS bağlantı bilgileri Lambda içerisinde doğrudan kod içerisine yazılmadı. Bunun yerine aşağıdaki bilgiler `Environment Variables` olarak tanımlandı:
+
+- DB_HOST
+- DB_PORT
+- DB_NAME
+- DB_USER
+- DB_PASSWORD
+
+Bu yapı sayesinde veritabanı bağlantı bilgileri uygulama kodundan ayrılmış oldu.
+
+RDS bağlantısını gerçekleştirmek için Python tarafında `PyMySQL` kütüphanesi kullanıldı. Bu kütüphane Lambda ortamına bir `Lambda Layer` olarak eklendi.
+
+İlk olarak Lambda ile RDS arasındaki bağlantı basit bir sorgu ile test edildi:
+
+```sql
+cursor.execute("SELECT 1")
+```
+Test sonucunda bağlantının başarılı olduğu doğrulandı. RDS bağlantısı başarıyla doğrulandıktan sonra, haber verilerinin düzenli ve sorgulanabilir bir yapıda saklanabilmesi için `news_articles` tablosu oluşturuldu.
+Tablo yapısı şu şekildedir:
+
+```sql
+CREATE TABLE news_articles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    category VARCHAR(50) NOT NULL,
+    rank_no INT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NULL,
+    source VARCHAR(255),
+    published_at DATETIME NULL,
+    url TEXT NOT NULL,
+    scraped_at DATETIME NOT NULL,
+    INDEX idx_category_scraped_at (category, scraped_at)
+);
+```
+Her kategori için ayrı tablo oluşturmak yerine tek bir `news_articles` tablosu kullanıldı. Bunun nedeni bütün haber kategorilerinin aynı veri yapısına sahip olmasıdır. Kategoriler `category` alanı üzerinden birbirinden ayrılmaktadır.
