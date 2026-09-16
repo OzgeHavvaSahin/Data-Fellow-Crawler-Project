@@ -265,3 +265,133 @@ CREATE TABLE news_articles (
 );
 ```
 Her kategori için ayrı tablo oluşturmak yerine tek bir `news_articles` tablosu kullanıldı. Bunun nedeni bütün haber kategorilerinin aynı veri yapısına sahip olmasıdır. Kategoriler `category` alanı üzerinden birbirinden ayrılmaktadır.
+
+## VPC ve İnternet Erişim Problemi
+
+Amazon RDS veritabanına güvenli bir şekilde erişebilmek için Lambda fonksiyonu `VPC` içerisine alındı. Bu değişiklik sonrasında Lambda ile RDS arasındaki bağlantı başarılı şekilde kurulabildi. Ancak Lambda VPC içerisine alındıktan sonra Google News RSS kaynaklarına yapılan isteklerde bağlantı problemleri yaşanmaya başladı. Crawler, Google News'e erişmeye çalışırken `ConnectTimeout` hatası verdi.
+Bu problemin temel nedeni, VPC içerisinde çalışan Lambda fonksiyonunun public internete doğrudan erişememesiydi.
+
+İlk mimaride tek bir Lambda fonksiyonunun hem Google News RSS kaynaklarına bağlanması hem de Amazon RDS'e veri yazması planlanmıştı.
+```text
+Google News RSS
+        ↓
+Crawler Lambda
+        ↓
+Amazon S3
+        ↓
+Amazon RDS MySQL
+```
+Ancak Lambda VPC içerisine alındığında internet erişimi için ek bir ağ çözümüne ihtiyaç duyuldu.
+
+Bu noktada `NAT Gateway` kullanımı değerlendirildi. NAT Gateway, VPC içerisindeki kaynakların internete çıkmasını sağlayabilmektedir. Ancak proje kapsamında ek maliyet oluşturacağı için bu çözüm tercih edilmedi. Bunun yerine veri toplama ve veritabanına yazma işlemleri iki ayrı Lambda fonksiyonuna ayrıldı.
+
+- `Crawler Lambda` VPC dışında bırakıldı ve Google News RSS kaynaklarına internet üzerinden erişmeye devam etti.
+- `RDS Writer Lambda` VPC içerisinde çalışacak şekilde yapılandırıldı ve Amazon RDS'e private network üzerinden erişti.
+
+Bu mimari değişikliği sayesinde hem internet erişim problemi çözüldü hem de iki Lambda fonksiyonunun sorumlulukları birbirinden ayrılmış oldu.
+
+### S3 Gateway VPC Endpoint
+
+`RDS Writer Lambda` VPC içerisinde çalıştığı için Amazon S3'e erişim konusu ayrıca ele alındı. VPC içerisindeki Lambda'nın S3'e ulaşabilmesi için NAT Gateway kullanılabilirdi ancak bu çözüm ek maliyet oluşturacaktı. Bu nedenle `S3 Gateway VPC Endpoint` oluşturuldu. Bu endpoint sayesinde `RDS Writer Lambda`, public internete çıkmadan Amazon S3 üzerindeki JSON dosyalarına erişebildi.
+
+Genel bağlantı yapısı şu şekildedir:
+
+```text
+Amazon S3
+    ↓
+S3 Gateway VPC Endpoint
+    ↓
+RDS Writer Lambda
+    ↓
+Amazon RDS MySQL
+```
+
+Bu yapı ile S3 ve VPC içerisindeki Lambda arasındaki iletişim AWS ağı içerisinde gerçekleştirilmiş ve NAT Gateway ihtiyacı ortadan kaldırılmıştır.
+
+## Veritabanına Veri Aktarımı
+
+Crawler Lambda tarafından Amazon S3'e kaydedilen her yeni JSON dosyası, `S3 ObjectCreated Event` ile `RDS Writer Lambda` fonksiyonunu tetikler. `RDS Writer Lambda` çalıştığında event içerisinden ilgili S3 bucket ve object key bilgilerini alır. Daha sonra JSON dosyası S3 üzerinden okunur ve Python nesnesine dönüştürülür.
+
+S3 üzerindeki veriyi okumak için `boto3` kullanıldı:
+
+```python
+import json
+import boto3
+
+s3 = boto3.client("s3")
+
+def read_articles_from_s3(bucket, key):
+    response = s3.get_object(
+        Bucket=bucket,
+        Key=key
+    )
+
+    body = response["Body"].read().decode("utf-8")
+
+    return json.loads(body)
+```
+
+Okunan haber verileri Amazon RDS MySQL üzerindeki `news_articles` tablosuna aktarılır. Veritabanına yazma işlemi `PyMySQL` ile gerçekleştirilir. RSS üzerinden gelen `published_at` bilgisi MySQL'in DATETIME formatına dönüştürülür ve işlem sonunda `commit()` ile kayıtlar kalıcı hale getirilir.
+
+Veritabanına yazma işlemi `save_articles()` fonksiyonu ile gerçekleştirildi:
+
+```python
+def save_articles(articles):
+    connection = get_db_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO news_articles (
+                    category,
+                    rank_no,
+                    title,
+                    description,
+                    source,
+                    published_at,
+                    url,
+                    scraped_at
+                )
+                VALUES (
+                    %s, %s, %s, %s,
+                    %s, %s, %s, UTC_TIMESTAMP()
+                )
+            """
+
+            for article in articles:
+                cursor.execute(
+                    sql,
+                    (
+                        article["category"],
+                        article["rank"],
+                        article["title"],
+                        article.get("description"),
+                        article.get("source"),
+                        parse_published_at(
+                            article.get("published_at")
+                        ),
+                        article["url"]
+                    )
+                )
+
+        connection.commit()
+
+    finally:
+        connection.close()
+```
+save_articles() fonksiyonu, S3'ten okunan haberleri news_articles tablosuna ekler ve işlem tamamlandığında verileri kalıcı olarak kaydeder.
+
+## Örnek SQL Sorguları
+
+RDS üzerinde saklanan haber verileri SQL sorguları ile analiz edilebilir. Aşağıda proje kapsamında kullanılabilecek bazı örnek sorgular yer almaktadır.
+
+### Kategori Bazında Haber Sayısı
+
+```sql
+SELECT
+    category,
+    COUNT(*) AS article_count
+FROM news_articles
+GROUP BY category;**
+```
+Bu sorgu, her kategoride kaç haber kaydı bulunduğunu gösterir. Böylece kategoriler arasında veri yoğunluğu karşılaştırılabilir.
