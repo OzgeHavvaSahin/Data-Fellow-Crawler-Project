@@ -121,7 +121,7 @@ Projede veri toplama ve veritabanına aktarma işlemleri iki ayrı Lambda functi
 - Bu Lambda VPC içerisinde çalışır ve S3 üzerindeki veriyi okuyarak Amazon RDS MySQL veritabanına aktarır.
 - VPC içerisindeki Lambda'nın Amazon S3'e NAT Gateway olmadan erişebilmesi için `S3 Gateway VPC Endpoint` kullanılmıştır.
 
-## Crawler Lambda ve Amazon S3 Entegrasyonu
+## Crawler Lambda Function
 
 İlk olarak crawler kodunu çalıştıracak bir AWS Lambda function oluşturuldu.
 
@@ -178,5 +178,48 @@ Crawler Lambda'nın manuel olarak çalıştırılmasına gerek kalmaması için 
 
 Lambda'nın Function Overview ekranı
 
+![](./diagrams/CrawlerFunction.png)
 
-### Amazon S3 Üzerine Veri Kaydetme
+## Amazon S3 Üzerine Veri Kaydetme
+
+Crawler Lambda tarafından Google News RSS kaynaklarından alınan ve işlenen haber verileri, JSON formatına dönüştürülerek `Amazon S3` üzerinde saklandı.
+
+Projede tek bir S3 bucket kullanıldı. Haber verileri kategori ve tarih bilgisine göre düzenlenerek farklı object key'ler altında tutuldu.
+
+Örnek dosya yapısı:
+
+```text
+news/business/2026/09/15/09-06.json
+news/world/2026/09/15/09-06.json
+news/sports/2026/09/15/09-06.json
+```
+Bu yapı sayesinde her kategoriye ait veriler ayrı olarak saklanmakta ve crawler'ın her çalıştırılmasında yeni bir JSON dosyası oluşturulmaktadır. Böylece önceki çalıştırmalarda elde edilen veriler de korunarak geçmişe dönük snapshot'lar tutulabilmektedir.
+
+S3'e veri kaydetme işlemi `storage.py` dosyasında bulunan `save_to_s3()` fonksiyonu ile gerçekleştirildi:
+
+```python
+def save_to_s3(data,category):
+    now = datetime.now(timezone.utc)
+
+    key = (
+        f"news/{category}/"
+        f"{now.year}/"
+        f"{now.month:02d}/"
+        f"{now.day:02d}/"
+        f"{now.hour:02d}-{now.minute:02d}.json"
+    )
+
+    s3_client.put_object(
+        Bucket = S3_BUCKET,
+        Key = key,
+        Body = json.dumps(data, ensure_ascii= False,
+                          indent=2),
+        ContentType = "application/json"
+    )
+    return key
+```
+Bu fonksiyon içerisinde önce o anki UTC zaman bilgisi alınır. Daha sonra kategori, yıl, ay, gün, saat ve dakika bilgileri kullanılarak S3 üzerinde kullanılacak object key oluşturulur. `json.dumps()` ile haber verileri JSON formatına dönüştürülür ve `put_object()` metodu ile ilgili S3 bucket içerisine kaydedilir.
+
+Lambda fonksiyonunun S3'e veri yazabilmesi için gerekli IAM izinleri execution role üzerinden tanımlandı.
+
+Amazon S3 içerisinde oluşturulan yapı AWS Console üzerinden kategori ve tarih bazlı olarak görüntülenebilmektedir.
