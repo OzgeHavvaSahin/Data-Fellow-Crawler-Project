@@ -395,3 +395,35 @@ FROM news_articles
 GROUP BY category;**
 ```
 Bu sorgu, her kategoride kaç haber kaydı bulunduğunu gösterir. Böylece kategoriler arasında veri yoğunluğu karşılaştırılabilir.
+
+![](./diagrams/sql1.png)
+
+### Son Eklenen Haberleri Görüntüleme
+
+```sql
+SELECT
+    category,
+    rank_no,
+    title,
+    source,
+    published_at,
+    scraped_at
+FROM news_articles
+ORDER BY scraped_at DESC
+LIMIT 20;
+```
+
+Bu sorgu, veritabanına en son eklenen 20 haber kaydını gösterir. Böylece crawler'ın güncel verileri başarılı şekilde RDS'e aktarıp aktarmadığı kontrol edilebilir.
+
+![](./diagrams/sql2.png)
+
+### Belirli Bir Kategorideki Haberleri Görüntüleme
+
+```sql
+SELECT *
+FROM news_articles
+WHERE category = 'business'
+ORDER BY scraped_at DESC;
+```
+
+Bu sorgu yalnızca `business` kategorisine ait haberleri listeler. Aynı yapı diğer kategoriler için de kullanılabilir.
