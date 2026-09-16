@@ -115,4 +115,68 @@ Projede veri toplama ve veritabanına aktarma işlemleri iki ayrı Lambda functi
 
 ![AWS Architecture](./diagrams/Aws.png)
 
-`EventBridge Scheduler`, `Crawler Lambda` fonksiyonunu saatlik olarak tetikler. Crawler Lambda, Google News RSS kaynaklarından haberleri toplar ve JSON formatında Amazon S3'e kaydeder. Amazon S3 üzerinde yeni bir JSON dosyası oluştuğunda `S3 ObjectCreated Event`, `RDS Writer Lambda` fonksiyonunu tetikler. Bu Lambda VPC içerisinde çalışır ve S3 üzerindeki veriyi okuyarak Amazon RDS MySQL veritabanına aktarır.VPC içerisindeki Lambda'nın Amazon S3'e NAT Gateway olmadan erişebilmesi için `S3 Gateway VPC Endpoint` kullanılmıştır.
+- `EventBridge Scheduler`, `Crawler Lambda` fonksiyonunu saatlik olarak tetikler. 
+- Crawler Lambda, Google News RSS kaynaklarından haberleri toplar ve JSON formatında Amazon S3'e kaydeder. 
+- Amazon S3 üzerinde yeni bir JSON dosyası oluştuğunda `S3 ObjectCreated Event`, `RDS Writer Lambda` fonksiyonunu tetikler.
+- Bu Lambda VPC içerisinde çalışır ve S3 üzerindeki veriyi okuyarak Amazon RDS MySQL veritabanına aktarır.
+- VPC içerisindeki Lambda'nın Amazon S3'e NAT Gateway olmadan erişebilmesi için `S3 Gateway VPC Endpoint` kullanılmıştır.
+
+## Crawler Lambda ve Amazon S3 Entegrasyonu
+
+İlk olarak crawler kodunu çalıştıracak bir AWS Lambda function oluşturuldu.
+
+Bu Lambda'nın temel görevi:
+
+- Google News RSS kaynaklarına bağlanmak
+- Haber verilerini almak
+- Verileri parse etmek
+- Haberleri JSON formatında hazırlamak
+- Amazon S3 üzerine kaydetmek
+
+Local ortamda geliştirilen crawler kodu Lambda üzerinde çalışacak şekilde düzenlendi.
+
+Ana Lambda handler fonksiyonu şu yapıda oluşturuldu:
+
+```python
+from src.scraper import fetch_news, extract_links
+from src.storage import save_to_s3
+from src.config import URLS
+
+def lambda_handler(event, context):
+    results = []
+
+    for category in URLS:
+        if category == "base":
+            continue
+
+        root = fetch_news(category)
+        news_items = extract_links(root, category)
+
+        s3_key = save_to_s3(
+            news_items,
+            category
+        )
+
+        results.append({
+            "category": category,
+            "count": len(news_items),
+            "s3_key": s3_key
+        })
+
+    return {
+        "statusCode": 200,
+        "results": results
+    }
+```
+Bu fonksiyon içerisinde kategori listesi dolaşılır ve her kategori için sırasıyla RSS verisi çekilir, haberler ayrıştırılır ve elde edilen veriler Amazon S3'e kaydedilir.
+
+Crawler kodunda requests gibi Python'ın standart kütüphanesinde bulunmayan paketler kullanıldığı için bu dependency'lerin Lambda ortamında ayrıca bulunması gerekti. Bu nedenle gerekli Python paketleri bir `Lambda Layer` içerisinde hazırlandı.
+Crawler Lambda için kullanılan temel dış dependency  `requests ` paketidir.
+Python'ın standart kütüphanesinde bulunan xml.etree.ElementTree, json ve benzeri modüllerin ayrıca eklenmesine gerek kalmadı.
+
+Crawler Lambda'nın manuel olarak çalıştırılmasına gerek kalmaması için `Amazon EventBridge Scheduler` kullanıldı. Scheduler üzerinde `rate(1 hour)` kuralı tanımlanarak crawler Lambda'nın her saat otomatik olarak tetiklenmesi sağlandı. Bu yapı sayesinde sistem belirli bir kullanıcı müdahalesi olmadan periyodik olarak çalışmakta ve her saat güncel Google News verilerini toplamaktadır.
+
+Lambda'nın Function Overview ekranı
+
+
+### Amazon S3 Üzerine Veri Kaydetme
