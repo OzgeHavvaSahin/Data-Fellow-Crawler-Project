@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: DFCP V1 main infrastructure
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - test
+      - prod
+    Description: Deployment environment
+
+  DeploymentBucketName:
+    Type: String
+    Description: S3 bucket containing Lambda deployment packages
+
+Resources:
+
+  RssLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Sub: "dfcp-v1-${Environment}-rss-layer"
+      Description: Rss crawler dependency layer
+      ContentUri:
+        Bucket:
+          Ref: DeploymentBucketName
+        Key: layer/rss-layer.zip
+      CompatibleRuntimes:
+        - python3.12
+
+  CrawlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: "dfcp-v1-${Environment}-crawler"
+      Runtime: python3.12
+      Handler: src.lambda_function.lambda_handler
+      Timeout: 30
+
+      CodeUri:
+        Bucket:
+          Ref: DeploymentBucketName
+        Key: lambda/lambda-deploy.zip
+
+      Layers:
+        - Ref: RssLayer
