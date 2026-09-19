@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Initial infrastructure for DFCP deployment artifacts
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - test
+      - prod
+    Description: Deployment environment
+
+Resources:
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: "dfcp-v1-${Environment}-deployment-${AWS::AccountId}-${AWS::Region}"
+
+Outputs:
+  DeploymentBucketName:
+    Description: S3 bucket used to store Lambda deployment zip files
+    Value:
+      Ref: DeploymentBucket
