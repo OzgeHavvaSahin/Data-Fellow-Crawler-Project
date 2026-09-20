@@ -21,11 +21,30 @@ def parse_published_at(value):
     dt = parsedate_to_datetime(value)
     return dt.replace(tzinfo=None)
 
+def create_table_if_not_exists(connection):
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS news_articles (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                category VARCHAR(50) NOT NULL,
+                rank_no INT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NULL,
+                source VARCHAR(255),
+                published_at DATETIME NULL,
+                url TEXT NOT NULL,
+                scraped_at DATETIME NOT NULL,
+                INDEX idx_category_scraped_at (category, scraped_at)
+            )
+        """)
+    connection.commit()
 
 def save_articles(articles):
     connection = get_db_connection()
 
     try:
+        create_table_if_not_exists(connection)
+
         with connection.cursor() as cursor:
             sql = """
                 INSERT INTO news_articles (
