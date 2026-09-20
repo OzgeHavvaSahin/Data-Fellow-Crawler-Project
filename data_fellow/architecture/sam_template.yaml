@@ -59,9 +59,50 @@ Resources:
             BucketName:
               Ref: NewsDataBucket
 
+      Events:
+        HourlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Description: Run crawler every hour
+            Enabled: true
+        
 
   NewsDataBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"            
+        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"  
+
+  MysqlLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Sub: "dfcp-v1-${Environment}-mysql-layer"
+      Description: PyMySQL dependency layer
+      ContentUri:
+        Bucket:
+          Ref: DeploymentBucketName
+        Key: layer/mysql-layer.zip
+      CompatibleRuntimes:
+        - python3.12
+
+  RdsWriterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: "dfcp-v1-${Environment}-rds-writer"
+
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Timeout: 30
+
+      CodeUri:
+        Bucket:
+          Ref: DeploymentBucketName
+        Key: lambda/rds-writer-deploy.zip
+
+      Layers:
+        - Ref: MysqlLayer                
+
+  
