@@ -11,6 +11,19 @@ Parameters:
       - prod
     Description: Deployment environment
 
+  DBName:
+    Type: String
+    Default: data_fellow
+
+  DBUser:
+    Type: String
+    Default: admin
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for the RDS MySQL database
+
   DeploymentBucketName:
     Type: String
     Description: S3 bucket containing Lambda deployment packages
@@ -103,6 +116,187 @@ Resources:
         Key: lambda/rds-writer-deploy.zip
 
       Layers:
-        - Ref: MysqlLayer                
+        - Ref: MysqlLayer  
 
-  
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - S3ReadPolicy:
+            BucketName:
+              Ref: NewsDataBucket
+      
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::GetAtt:
+              - RdsDatabase
+              - Endpoint.Address
+
+          DB_PORT: "3306"
+
+          DB_NAME:
+            Ref: DBName
+
+          DB_USER:
+            Ref: DBUser
+
+          DB_PASSWORD:
+            Ref: DBPassword
+      
+      VpcConfig:
+        SecurityGroupIds:
+          - Ref: RdsWriterSecurityGroup
+        SubnetIds:
+          - Ref: PrivateSubnet1
+          - Ref: PrivateSubnet2          
+          
+
+  DfcpVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-vpc" 
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: DfcpVpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-private-subnet-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: DfcpVpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-private-subnet-2"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: DfcpVpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-private-rt"
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnet2
+      RouteTableId:
+        Ref: PrivateRouteTable
+
+  RdsWriterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS Writer Lambda
+      VpcId:
+        Ref: DfcpVpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-rds-writer-sg"
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS MySQL
+      VpcId:
+        Ref: DfcpVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId:
+            Ref: RdsWriterSecurityGroup
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "dfcp-v1-${Environment}-rds-sg"   
+
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Ref: DfcpVpc
+      ServiceName:
+        Fn::Sub: "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - Ref: PrivateRouteTable
+
+  RdsDbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for DFCP RDS
+      SubnetIds:
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
+      DBSubnetGroupName:
+        Fn::Sub: "dfcp-v1-${Environment}-db-subnet-group"
+
+  RdsDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier:
+        Fn::Sub: "dfcp-v1-${Environment}-mysql"
+
+      Engine: mysql
+      DBInstanceClass: db.t3.micro
+
+      AllocatedStorage: 20
+      StorageType: gp2
+
+      DBName:
+        Ref: DBName
+
+      MasterUsername:
+        Ref: DBUser
+
+      MasterUserPassword:
+        Ref: DBPassword
+
+      DBSubnetGroupName:
+        Ref: RdsDbSubnetGroup
+
+      VPCSecurityGroups:
+        - Fn::GetAtt:
+            - RdsSecurityGroup
+            - GroupId
+
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 0
+
+      DeletionProtection: false
