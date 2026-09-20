@@ -46,3 +46,22 @@ Resources:
 
       Layers:
         - Ref: RssLayer
+
+      Environment:
+        Variables:
+          S3_BUCKET:
+            Ref: NewsDataBucket
+          AWS_REGION_NAME:
+            Ref: AWS::Region
+
+      Policies:
+        - S3WritePolicy:
+            BucketName:
+              Ref: NewsDataBucket
+
+
+  NewsDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"            
