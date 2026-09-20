@@ -80,13 +80,22 @@ Resources:
             Description: Run crawler every hour
             Enabled: true
         
-
   NewsDataBucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - RdsWriterS3InvokePermission
     Properties:
       BucketName:
-        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"  
+        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"
 
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function:
+              Fn::GetAtt:
+                - RdsWriterFunction
+                - Arn
+                
   MysqlLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -120,10 +129,13 @@ Resources:
 
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - S3ReadPolicy:
-            BucketName:
-              Ref: NewsDataBucket
-      
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource:
+                Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}/*"
+            
       Environment:
         Variables:
           DB_HOST:
@@ -300,3 +312,17 @@ Resources:
       BackupRetentionPeriod: 0
 
       DeletionProtection: false
+
+  RdsWriterS3InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+          - RdsWriterFunction
+          - Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount:
+        Ref: AWS::AccountId
+      SourceArn:
+        Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"      
