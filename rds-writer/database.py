@@ -83,3 +83,14 @@ def save_articles(articles):
 
     finally:
         connection.close()
+
+def get_article_count():
+    connection = get_db_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM news_articles")
+            result = cursor.fetchone()
+            return result[0]
+    finally:
+        connection.close()
