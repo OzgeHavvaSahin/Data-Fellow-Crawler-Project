@@ -193,7 +193,7 @@ Environment:
 
 Bu sayede Python kodu test veya prod ortamına göre farklı bir bucket adı bilmek zorunda kalmadan, CloudFormation tarafından sağlanan değeri kullanabilmektedir.
 
-## RDS Writer Lamba ve S3 Event Entegrasyonu
+## RDS Writer Lambda ve S3 Event Entegrasyonu
 
 Amazon S3 üzerine yeni bir haber dosyası yazıldığında, ikinci Lambda fonksiyonu olan RDS Writer'ın otomatik olarak tetiklenmesi sağlandı. Bu amaçla S3 üzerinde `ObjectCreated` eventi tanımlandı.
 
@@ -390,7 +390,7 @@ To remove all limitations, upgrade your account plan.
 
 Bu hata, template içerisindeki RDS tanımından veya CloudFormation yapısından değil, kullanılan AWS hesabının mevcut RDS instance limitinden kaynaklanıyordu.
  
-### İlk Deneme: Prod RDS'nin CloudFormation ile Oluşturulması
+### Prod RDS'nin CloudFormation ile Oluşturulması
 
 İlk yaklaşımda test ortamında olduğu gibi prod ortamı için de ayrı bir RDS instance'ın sam_template.yaml içerisinden oluşturulması planlandı.
 
@@ -406,7 +406,7 @@ Prod Stack
 
 Ancak hesap üzerinde mevcut RDS instance bulunduğu için ikinci instance oluşturulmasına izin verilmedi. Bu nedenle prod stack RDS oluşturma aşamasında hata verdi ve rollback durumuna geçti.
 
-### İkinci Deneme: RDS Boyutunu veya Storage Değerini Küçültme
+###  RDS Boyutunu veya Storage Değerini Küçültme
 
 Problemin RDS maliyeti veya storage büyüklüğünden kaynaklanabileceği düşünüldü ve daha küçük bir RDS yapılandırmasının problemi çözüp çözmeyeceği değerlendirildi. Ancak alınan hata storage veya instance size ile ilgili değildi. Hata doğrudan `maximum number of instances` limitini ifade ediyordu.
 
@@ -422,4 +422,70 @@ ikinci bir RDS instance oluşturulmasını mümkün hale getirmiyordu. Dolayıs�
 
 Problemin CloudFormation'a özgü olup olmadığını anlamak için prod RDS instance'ın AWS Console üzerinden manuel olarak oluşturulması da denendi. Ancak manuel oluşturma sırasında da aynı hesap limiti ile karşılaşıldı.
 
+![](./diagrams/rdserror.png)
+
 Bu durum, problemin CloudFormation template'inden kaynaklanmadığını doğruladı. Böylece ikinci RDS instance oluşturulamamasının tamamen hesap seviyesindeki limit nedeniyle gerçekleştiği kesinleşti.
+
+### Mevcut RDS Instance'ın Ortak Kullanılması Fikri
+
+İkinci bir RDS instance oluşturulamadığı için alternatif olarak mevcut RDS instance'ın hem test hem de prod ortamı tarafından kullanılması değerlendirildi. Bu yaklaşımda fiziksel olarak tek bir RDS instance bulunacak ancak test ve prod verileri farklı database'lerde tutulacaktı.
+
+Örneğin:
+```
+Shared RDS Instance
+├── data_fellow_test
+└── data_fellow_prod
+```
+
+Bu yöntem, ikinci bir RDS instance oluşturmadan iki ortamın verilerinin mantıksal olarak birbirinden ayrılmasını sağlayabilirdi. Ancak bu noktada yeni bir network problemi ortaya çıktı.
+
+Test ve prod ortamları farklı CloudFormation stack'leri üzerinden oluşturulduğu için her ortamın ayrı VPC'si bulunuyordu. Mevcut RDS instance test ortamının VPC'si içerisinde bulunurken, prod RDS Writer Lambda prod VPC içerisinde çalışıyordu. Bu nedenle prod Lambda'nın mevcut private RDS instance'a doğrudan erişmesi mümkün değildi.
+
+Durum aşağıdaki gibiydi:
+
+```
+Test VPC
+├── Test RDS Writer
+└── Shared / Existing RDS
+
+Prod VPC
+└── Prod RDS Writer
+
+```
+Prod RDS Writer ile mevcut RDS farklı VPC'lerde bulunduğu için aralarında doğrudan private network bağlantısı bulunmamaktaydı.
+
+### VPC Peering Seçeneğinin Değerlendirilmesi
+
+İki VPC arasında iletişim sağlamak için VPC Peering kullanılması düşünüldü.
+
+Ancak test ve prod VPC'leri aynı CIDR bloğu ile oluşturulmuştu:
+
+```
+Test VPC = 10.0.0.0/16
+Prod VPC = 10.0.0.0/16
+```
+
+VPC Peering bağlantısında CIDR bloklarının çakışmaması gerektiği için mevcut yapıda iki VPC arasında peering oluşturulması mümkün değildi. Dolayısıyla shared RDS yaklaşımının uygulanabilmesi için prod VPC'nin farklı bir CIDR bloğu ile oluşturulması gerekirdi.
+
+Örneğin:
+
+```
+Test VPC = 10.0.0.0/16
+Prod VPC = 10.1.0.0/16
+```
+
+şeklinde bir ayrım yapılması halinde iki VPC arasında peering kurulabilir ve gerekli route tanımları ile prod RDS Writer'ın shared RDS'e erişmesi sağlanabilirdi. Ancak bu değişiklik mevcut prod network yapısının yeniden düzenlenmesini gerektirdiği için doğrudan uygulanmadı.
+
+## Sonuç
+
+Prod ortamında yaşanan RDS problemi uygulama kodundan veya CloudFormation template yapısından kaynaklanmamıştır. Temel neden AWS hesabında ikinci bir RDS instance oluşturulmasına izin verilmemesidir.
+
+Problemi anlamak ve alternatifleri değerlendirmek amacıyla:
+
+ - CloudFormation üzerinden ikinci RDS oluşturulması denendi.
+ - Daha küçük bir RDS yapılandırmasının çözüm olup olmayacağı değerlendirildi.
+ - RDS instance AWS Console üzerinden manuel olarak oluşturulmaya çalışıldı.
+ - Mevcut RDS instance'ın test ve prod ortamları arasında ortak kullanılması değerlendirildi.
+ - Ayrı VPC'ler arasındaki bağlantı için VPC Peering seçeneği incelendi.
+
+Bu çalışmalar sonucunda asıl problemin AWS hesap limiti olduğu ve shared RDS kullanılması durumunda ayrıca VPC network yapısının yeniden düzenlenmesi gerektiği görüldü.
