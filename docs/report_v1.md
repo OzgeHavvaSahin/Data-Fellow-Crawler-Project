@@ -232,3 +232,57 @@ VPC
 ```
 
 RDS Security Group üzerinde yalnızca RDS Writer Lambda'nın security group'undan gelen `TCP 3306` bağlantılarına izin verildi. Bu sayede MySQL portu internete açık hale getirilmeden Lambda ile veritabanı arasındaki iletişim sağlandı.
+
+## Bağımlılık Yönetimi ve Circular Dependency Problemi
+
+CloudFormation ile altyapı oluşturulurken bazı AWS kaynaklarının birbirine bağımlı olması nedeniyle kaynakların oluşturulma sırası önem kazanmaktadır. Bu projede özellikle Amazon S3 ile RDS Writer Lambda arasındaki event bağlantısı oluşturulurken bir `Circular Dependency` problemi ile karşılaşıldı. İlk yaklaşımda S3 event'i doğrudan RDS Writer Lambda'nın SAM tanımı içerisinde oluşturulmuştu. Ancak bu durumda aşağıdaki kaynaklar birbirine karşılıklı olarak bağımlı hale geldi:
+
+```text
+NewsDataBucket
+      ↓
+RDS Writer Lambda
+      ↓
+Lambda Permission
+      ↓
+NewsDataBucket
+```
+
+S3 bucket'ın Lambda fonksiyonunu tetikleyebilmesi için Lambda permission kaynağına ihtiyaç vardı. Buna karşılık Lambda permission içerisinde de ilgili S3 bucket ARN bilgisi kullanılıyordu. Bu karşılıklı bağımlılık CloudFormation tarafından: `Circular dependency between resources` hatası ile sonuçlandı.
+
+Problemi çözmek için S3 trigger tanımı RDS Writer Lambda'nın Events bölümünden çıkarıldı ve Lambda'nın S3 tarafından çağrılmasına izin veren kaynak ayrıca tanımlandı.
+
+```yaml
+RdsWriterS3InvokePermission:
+  Type: AWS::Lambda::Permission
+  Properties:
+    FunctionName:
+      Fn::GetAtt:
+        - RdsWriterFunction
+        - Arn
+    Action: lambda:InvokeFunction
+    Principal: s3.amazonaws.com
+    SourceAccount:
+      Ref: AWS::AccountId
+    SourceArn:
+      Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"
+```
+Daha sonra S3 bucket üzerinde Lambda notification ayrıca tanımlandı:
+
+```yaml
+NewsDataBucket:
+  Type: AWS::S3::Bucket
+  DependsOn:
+    - RdsWriterS3InvokePermission
+  Properties:
+    BucketName:
+      Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"
+
+    NotificationConfiguration:
+      LambdaConfigurations:
+        - Event: s3:ObjectCreated:*
+          Function:
+            Fn::GetAtt:
+              - RdsWriterFunction
+              - Arn
+```
+Burada kullanılan `DependsOn`, S3 bucket oluşturulmadan önce Lambda invoke permission kaynağının hazır olmasını sağladı. Ayrıca RDS Writer Lambda'nın S3 üzerindeki dosyaları okuyabilmesi için gerekli IAM policy içerisinde bucket ARN'i doğrudan resource referansı ile oluşturmak yerine Fn::Sub kullanılarak üretildi. Bu yaklaşım ile CloudFormation'ın kaynaklar arasında oluşturduğu gereksiz bağımlılık azaltıldı ve circular dependency problemi giderildi. Sonuç olarak S3 üzerine yeni bir dosya yazıldığında RDS Writer Lambda'nın otomatik olarak tetiklenmesini sağlayan yapı CloudFormation üzerinden başarılı şekilde oluşturulabildi.
