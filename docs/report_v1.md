@@ -152,3 +152,83 @@ dfcp-v1-prod-crawler
 dfcp-v1-test-rds-writer
 dfcp-v1-prod-rds-writer
 ```
+Böylece aynı template kullanılarak test ve prod ortamlarında birbirinden ayrı AWS kaynaklarının oluşturulması sağlandı.
+
+## EventBridge ile Saatlik Otomatik Çalıştırma
+
+Crawler Lambda fonksiyonunun manuel olarak çalıştırılmasına gerek kalmaması için `Amazon EventBridge` kullanıldı.
+
+Crawler Lambda içerisinde bir schedule tanımı yapılarak fonksiyonun her saat otomatik olarak tetiklenmesi sağlandı.
+
+```yaml
+Events:
+  HourlySchedule:
+    Type: Schedule
+    Properties:
+      Schedule: rate(1 hour)
+      Description: Run crawler every hour
+      Enabled: true
+```
+Bu yapı sayesinde crawler fonksiyonu kullanıcı müdahalesi olmadan belirli aralıklarla çalışmakta ve Google News RSS kaynaklarından güncel haber verilerini toplamaktadır. Toplanan veriler kategori bazında JSON formatına dönüştürülerek Amazon S3 üzerinde saklanmaktadır.
+
+ ## S3 Üzerinde Haber Verilerinin Saklanması
+
+Crawler Lambda tarafından toplanan haber verileri, CloudFormation tarafından oluşturulan ayrı bir S3 bucket içerisinde saklandı .Crawler Lambda'nın bu bucket üzerine veri yazabilmesi için gerekli S3 izinleri SAM policy tanımları üzerinden verildi.
+
+```yaml
+Policies:
+  - S3WritePolicy:
+      BucketName:
+        Ref: NewsDataBucket
+```
+
+Ayrıca bucket adı Lambda'ya environment variable olarak aktarıldı:
+
+```yaml
+Environment:
+  Variables:
+    S3_BUCKET:
+      Ref: NewsDataBucket
+```
+
+Bu sayede Python kodu test veya prod ortamına göre farklı bir bucket adı bilmek zorunda kalmadan, CloudFormation tarafından sağlanan değeri kullanabilmektedir.
+
+## RDS Writer Lamba ve S3 Event Entegrasyonu
+
+Amazon S3 üzerine yeni bir haber dosyası yazıldığında, ikinci Lambda fonksiyonu olan RDS Writer'ın otomatik olarak tetiklenmesi sağlandı. Bu amaçla S3 üzerinde `ObjectCreated` eventi tanımlandı.
+
+RDS Writer Lambda'nın görevi:
+
+ - S3 event içerisinden bucket ve object key bilgilerini almak
+ - JSON dosyasını Amazon S3 üzerinden okumak
+ - Haber kayıtlarını ayrıştırmak
+ - MySQL veritabanına kaydetmek
+
+RDS Writer'ın private VPC içerisinde çalışması nedeniyle Amazon S3 erişimi için S3 Gateway VPC Endpoint kullanıldı.
+
+Bu yapı sayesinde NAT Gateway kullanılmadan private subnet içerisindeki Lambda fonksiyonunun Amazon S3'e erişmesi sağlandı.
+
+## VPC ve Network Yapısının CloudFormation ile Oluşturulması
+
+RDS Writer Lambda ve MySQL veritabanı arasındaki bağlantının private network üzerinden sağlanabilmesi için gerekli VPC altyapısı da `sam_template.yaml` içerisinde tanımlandı.
+
+Oluşturulan temel network kaynakları:
+
+ - VPC
+ - İki private subnet
+ - Private route table
+ - RDS Writer Security Group
+ - RDS Security Group
+ - S3 Gateway VPC Endpoint
+
+İki farklı Availability Zone içerisinde private subnet oluşturularak RDS için gerekli network yapısı hazırlandı.
+
+```text
+VPC
+├── Private Subnet 1
+├── Private Subnet 2
+├── RDS Writer Lambda
+└── RDS MySQL
+```
+
+RDS Security Group üzerinde yalnızca RDS Writer Lambda'nın security group'undan gelen `TCP 3306` bağlantılarına izin verildi. Bu sayede MySQL portu internete açık hale getirilmeden Lambda ile veritabanı arasındaki iletişim sağlandı.
