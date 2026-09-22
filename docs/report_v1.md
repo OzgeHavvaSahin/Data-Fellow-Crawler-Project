@@ -476,7 +476,7 @@ Prod VPC = 10.1.0.0/16
 
 şeklinde bir ayrım yapılması halinde iki VPC arasında peering kurulabilir ve gerekli route tanımları ile prod RDS Writer'ın shared RDS'e erişmesi sağlanabilirdi. Ancak bu değişiklik mevcut prod network yapısının yeniden düzenlenmesini gerektirdiği için doğrudan uygulanmadı.
 
-## Sonuç
+### Sonuç
 
 Prod ortamında yaşanan RDS problemi uygulama kodundan veya CloudFormation template yapısından kaynaklanmamıştır. Temel neden AWS hesabında ikinci bir RDS instance oluşturulmasına izin verilmemesidir.
 
@@ -489,3 +489,22 @@ Problemi anlamak ve alternatifleri değerlendirmek amacıyla:
  - Ayrı VPC'ler arasındaki bağlantı için VPC Peering seçeneği incelendi.
 
 Bu çalışmalar sonucunda asıl problemin AWS hesap limiti olduğu ve shared RDS kullanılması durumunda ayrıca VPC network yapısının yeniden düzenlenmesi gerektiği görüldü.
+
+## Genel Değerlendirme
+
+DFCP V1 kapsamında altyapının büyük bölümü Infrastructure as Code yaklaşımına taşındı ve test ile prod ortamlarının aynı parametrik template üzerinden oluşturulması sağlandı.
+
+Test ortamında sistem uçtan uca doğrulandı. Prod ortamında ise AWS hesap limiti nedeniyle ikinci bir RDS instance oluşturulamadı. Buna rağmen prod stack'in diğer kaynakları başarıyla oluşturuldu ve problemin CloudFormation'dan değil AWS hesap kısıtından kaynaklandığı doğrulandı.
+
+Bu çalışma sırasında özellikle:
+
+- AWS CloudFormation ve SAM kullanımı,
+- Parametrik test/prod ortam yönetimi,
+- Lambda deployment paketlerinin S3 üzerinden kullanılması,
+- EventBridge ile zamanlanmış çalışma,
+- S3 event ile Lambda tetikleme,
+- VPC ve private network tasarımı,
+- S3 Gateway VPC Endpoint kullanımı,
+- CloudFormation dependency ve circular dependency yönetimi
+
+konularında uygulamalı bir yapı oluşturuldu.
