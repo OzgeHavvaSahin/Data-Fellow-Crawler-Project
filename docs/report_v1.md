@@ -286,3 +286,87 @@ NewsDataBucket:
               - Arn
 ```
 Burada kullanılan `DependsOn`, S3 bucket oluşturulmadan önce Lambda invoke permission kaynağının hazır olmasını sağladı. Ayrıca RDS Writer Lambda'nın S3 üzerindeki dosyaları okuyabilmesi için gerekli IAM policy içerisinde bucket ARN'i doğrudan resource referansı ile oluşturmak yerine Fn::Sub kullanılarak üretildi. Bu yaklaşım ile CloudFormation'ın kaynaklar arasında oluşturduğu gereksiz bağımlılık azaltıldı ve circular dependency problemi giderildi. Sonuç olarak S3 üzerine yeni bir dosya yazıldığında RDS Writer Lambda'nın otomatik olarak tetiklenmesini sağlayan yapı CloudFormation üzerinden başarılı şekilde oluşturulabildi.
+
+## Test Stack'in Oluşturulması ve Uçtan Uca Doğrulama
+
+Ana `sam_template.yaml` dosyası hazırlandıktan sonra ilk olarak test ortamı oluşturuldu. Test ortamı için CloudFormation stack adı `dfcp-v1-test` olarak belirlendi.
+
+Stack oluşturulmadan önce template doğrulaması AWS CLI üzerinden yapıldı:
+
+```
+aws cloudformation validate-template `
+  --template-body file://data_fellow/architecture/sam_template.yaml
+```
+Daha sonra test stack'i CloudFormation üzerinden oluşturuldu/güncellendi.
+
+```
+aws cloudformation update-stack `
+  --stack-name dfcp-v1-test `
+  --template-body file://data_fellow/architecture/sam_template.yaml `
+  --parameters `
+    ParameterKey=Environment,ParameterValue=test `
+    ParameterKey=DeploymentBucketName,ParameterValue=dfcp-v1-test-deployment-....-eu-north-1 `
+  --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM
+```
+
+`CAPABILITY_IAM parametresi`, CloudFormation'ın template içerisinde tanımlanan IAM kaynaklarını ve Lambda için gerekli rol/policy yapılarını oluşturabilmesine izin vermek amacıyla kullanıldı. `CAPABILITY_AUTO_EXPAND` ise AWS SAM transform işlemlerinin CloudFormation tarafından uygulanabilmesi için kullanıldı.
+
+### Uçtan Uca Test
+
+Stack başarıyla oluşturulduktan sonra yalnızca kaynakların oluşup oluşmadığı değil, sistemin gerçekten uçtan uca çalışıp çalışmadığı da test edildi.
+
+Test edilen veri akışı aşağıdaki şekildedir:
+
+```
+EventBridge
+    ↓
+Crawler Lambda
+    ↓
+Google News RSS
+    ↓
+Amazon S3
+    ↓
+S3 ObjectCreated Event
+    ↓
+RDS Writer Lambda
+    ↓
+Amazon RDS MySQL
+```
+
+Crawler Lambda çalıştırıldığında Google News RSS kaynaklarından haber verileri alındı ve ilgili test S3 bucket'ına JSON dosyaları yazıldı.
+S3 üzerine yeni bir dosya oluşturulduğunda `ObjectCreated` eventi ile RDS Writer Lambda otomatik olarak tetiklendi.
+RDS Writer Lambda:
+ - S3 event içerisinden bucket ve object key bilgisini aldı.
+ - İlgili JSON dosyasını S3 üzerinden okudu.
+ - Haber kayıtlarını ayrıştırdı.
+ - news_articles tablosuna kayıtları ekledi.
+
+Ayrıca uygulama koduna tablo bulunmadığında otomatik olarak oluşturulmasını sağlayan:
+
+```sql
+CREATE TABLE IF NOT EXISTS news_articles
+```
+
+mantığı eklendi.
+
+Böylece veritabanı tarafında tabloyu manuel olarak önceden oluşturma zorunluluğu ortadan kaldırıldı.
+
+### CloudWatch Logları ile Doğrulama
+
+RDS Writer Lambda'nın çalışması `Amazon CloudWatch` logları üzerinden kontrol edildi.
+
+Loglarda aşağıdaki bilgiler görüntülendi:
+```
+S3 key: news/entertainment/2026/09/20/17-12.json
+Inserted article count: 56
+Total article count: 1716
+```
+Bu çıktılar sayesinde:
+
+ - S3 üzerindeki doğru dosyanın işlendiği,
+ - Dosya içerisindeki haberlerin veritabanına eklendiği,
+ - MySQL içerisindeki toplam kayıt sayısının arttığı
+
+doğrulandı.
+
+Sonuç olarak test ortamında CloudFormation tarafından oluşturulan mimarinin yalnızca deployment seviyesinde değil, uygulamanın tamamında uçtan uca başarılı şekilde çalıştığı doğrulandı.
