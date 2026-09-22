@@ -370,3 +370,56 @@ Bu çıktılar sayesinde:
 doğrulandı.
 
 Sonuç olarak test ortamında CloudFormation tarafından oluşturulan mimarinin yalnızca deployment seviyesinde değil, uygulamanın tamamında uçtan uca başarılı şekilde çalıştığı doğrulandı.
+
+## Prod Stack'in Oluşturulması ve RDS Limit Problemi
+
+Test ortamının başarılı şekilde çalışmasının ardından aynı `sam_template.yaml` kullanılarak prod ortamının oluşturulmasına geçildi. Prod ortamı için ayrı bir initial stack oluşturuldu ve prod deployment bucket hazırlandı. Test ortamında kullanılan Lambda deployment paketleri ve Lambda Layer dosyaları prod deployment bucket içerisine de yüklendi.
+
+Prod ortamı için ana CloudFormation stack adı `dfcp-v1-prod` olarak belirlendi.
+
+Amaç, test ortamında çalışan mimarinin aynı template üzerinden prod ortamında da yeniden oluşturulmasıydı.
+
+Prod stack oluşturma işlemi sırasında S3, Lambda, Lambda Layer, EventBridge, VPC, subnet, route table, security group ve diğer kaynakların oluşturulmasında problem yaşanmadı. Ancak CloudFormation ikinci bir Amazon RDS MySQL instance oluşturmaya çalıştığında deployment başarısız oldu.
+
+AWS tarafından aşağıdaki anlama gelen bir hata döndürüldü:
+
+```
+You reached the maximum number of instances available with free plan accounts.
+To remove all limitations, upgrade your account plan.
+```
+
+Bu hata, template içerisindeki RDS tanımından veya CloudFormation yapısından değil, kullanılan AWS hesabının mevcut RDS instance limitinden kaynaklanıyordu.
+ 
+### İlk Deneme: Prod RDS'nin CloudFormation ile Oluşturulması
+
+İlk yaklaşımda test ortamında olduğu gibi prod ortamı için de ayrı bir RDS instance'ın sam_template.yaml içerisinden oluşturulması planlandı.
+
+Beklenen yapı:
+```
+Test Stack
+└── Test RDS
+
+Prod Stack
+└── Prod RDS
+```
+şeklindeydi.
+
+Ancak hesap üzerinde mevcut RDS instance bulunduğu için ikinci instance oluşturulmasına izin verilmedi. Bu nedenle prod stack RDS oluşturma aşamasında hata verdi ve rollback durumuna geçti.
+
+### İkinci Deneme: RDS Boyutunu veya Storage Değerini Küçültme
+
+Problemin RDS maliyeti veya storage büyüklüğünden kaynaklanabileceği düşünüldü ve daha küçük bir RDS yapılandırmasının problemi çözüp çözmeyeceği değerlendirildi. Ancak alınan hata storage veya instance size ile ilgili değildi. Hata doğrudan `maximum number of instances` limitini ifade ediyordu.
+
+Bu nedenle:
+
+ - Storage miktarını azaltmak,
+ - Daha küçük bir DB instance class seçmek,
+ - RDS özelliklerini azaltmak
+
+ikinci bir RDS instance oluşturulmasını mümkün hale getirmiyordu. Dolayısıyla bu yaklaşım problemi çözmedi.
+
+### Üçüncü Deneme: RDS'yi AWS Console Üzerinden Manuel Oluşturmak
+
+Problemin CloudFormation'a özgü olup olmadığını anlamak için prod RDS instance'ın AWS Console üzerinden manuel olarak oluşturulması da denendi. Ancak manuel oluşturma sırasında da aynı hesap limiti ile karşılaşıldı.
+
+Bu durum, problemin CloudFormation template'inden kaynaklanmadığını doğruladı. Böylece ikinci RDS instance oluşturulamamasının tamamen hesap seviyesindeki limit nedeniyle gerçekleştiği kesinleşti.
