@@ -11,3 +11,73 @@ Bu fazın temel amacı, test ve prod ortamlarının aynı `sam_template.yaml` do
 Projede ayrıca Lambda fonksiyonlarının deployment paketleri ve Lambda Layer dosyaları ZIP formatında Amazon S3 üzerinde tutulmuş ve CloudFormation deployment sırasında bu paketleri kullanmıştır.
 
 Bu yaklaşım sayesinde AWS altyapısının manuel olarak tekrar tekrar oluşturulması yerine, aynı mimarinin kod üzerinden tekrar üretilebilir hale getirilmesi amaçlanmıştır.
+
+## Infrastructure as Code ve CloudFormation Yaklaşımı
+
+Infrastructure as Code (IaC), sunucu, ağ, depolama ve benzeri altyapı kaynaklarının manuel olarak oluşturulması yerine kod ile tanımlanmasını sağlayan bir yaklaşımdır.
+
+Bu projede IaC yaklaşımını uygulamak için `AWS CloudFormation` ve `AWS SAM` kullanılmıştır. Böylece önceki fazda AWS Console üzerinden manuel olarak oluşturulan kaynaklar, bu fazda bir template dosyası içerisinde tanımlanmıştır.
+
+CloudFormation içerisinde bir **stack**, projeye ait AWS kaynaklarının birlikte oluşturulduğu ve yönetildiği yapıyı ifade eder. Örneğin bu projede S3 bucket, Lambda fonksiyonları, Lambda Layer'lar, EventBridge kuralları, VPC, subnet, security group ve VPC Endpoint gibi kaynaklar aynı stack içerisinde yönetilmektedir.
+
+Projede ana altyapı dosyası olarak:
+
+`data_fellow/architecture/sam_template.yaml`
+
+kullanılmıştır. Test ve prod ortamları için farklı template dosyaları oluşturmak yerine tek bir parametrik template kullanılmıştır. `Environment` parametresi sayesinde aynı template hem test hem de prod ortamı için kullanılabilmektedir.
+
+Bu yapı sayesinde iki ortamın kaynak isimleri birbirinden ayrılmış ve aynı altyapının farklı ortamlar için tekrar oluşturulabilmesi sağlanmıştır.
+
+Ayrıca Lambda fonksiyonlarının kaynak kodları ve gerekli Lambda Layer dosyaları ZIP formatında Amazon S3 üzerinde tutulmuştur. CloudFormation deployment sırasında bu paketleri S3 üzerinden alarak ilgili Lambda ve Layer kaynaklarını oluşturmuştur.
+
+Bu yaklaşım sayesinde AWS altyapısı tekrar üretilebilir, versiyonlanabilir ve daha az manuel işlem gerektiren bir yapıya dönüştürülmüştür.
+
+## Initial Template ve Deployment Bucket
+
+Ana CloudFormation stack'ini oluşturmadan önce Lambda deployment paketlerinin ve Lambda Layer dosyalarının tutulacağı bir S3 bucket'a ihtiyaç duyuldu.
+
+Bu nedenle ilk aşamada `initial_sam_template.yaml` dosyası oluşturuldu. Bu template yalnızca deployment sırasında gerekli olan başlangıç kaynağını, yani S3 bucket'ı oluşturmak için kullanıldı.
+
+initial_sam_template.yaml içerisinde ortam bilgisi parametrik olarak tanımlandı:
+
+```yaml
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - test
+      - prod
+```
+
+Deployment bucket adı ise ortam, AWS hesap numarası ve region bilgisine göre dinamik olarak oluşturuldu:
+
+```yaml
+Resources:
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: "dfcp-v1-${Environment}-deployment-${AWS::AccountId}-${AWS::Region}"
+```
+
+Bu yapı sayesinde test ve prod ortamları için ayrı deployment bucket'ları oluşturulabildi.
+
+```text
+dfcp-v1-test-deployment-...
+dfcp-v1-prod-deployment-...
+```
+
+Lambda fonksiyonlarının ZIP paketleri ve Lambda Layer dosyaları bu bucket'lar içerisinde ayrı klasörlerde tutuldu:
+
+```text
+deployment-bucket/
+├── lambda/
+│   ├── lambda-deploy.zip
+│   └── rds-writer-deploy.zip
+└── layer/
+    ├── rss-layer.zip
+    └── mysql-layer.zip
+```
+
+Ana sam_template.yaml dosyası daha sonra bu S3 bucket içerisinde bulunan deployment paketlerini kullanarak Lambda ve Lambda Layer kaynaklarını oluşturdu. Bu yaklaşım sayesinde deployment paketleri ile altyapı tanımları birbirinden ayrılmış ve ana stack oluşturulmadan önce ihtiyaç duyulan kaynakların hazır hale gelmesi sağlanmıştır.
+
