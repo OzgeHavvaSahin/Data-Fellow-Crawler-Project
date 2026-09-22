@@ -81,3 +81,74 @@ deployment-bucket/
 
 Ana sam_template.yaml dosyası daha sonra bu S3 bucket içerisinde bulunan deployment paketlerini kullanarak Lambda ve Lambda Layer kaynaklarını oluşturdu. Bu yaklaşım sayesinde deployment paketleri ile altyapı tanımları birbirinden ayrılmış ve ana stack oluşturulmadan önce ihtiyaç duyulan kaynakların hazır hale gelmesi sağlanmıştır.
 
+## Ana SAM Template ile AWS Kaynaklarının Oluşturulması
+
+Initial stack ile deployment bucket oluşturulduktan ve gerekli ZIP paketleri S3 üzerine yüklendikten sonra, projenin asıl altyapısı `sam_template.yaml` dosyası içerisinde tanımlandı.
+
+Bu template içerisinde test ve prod ortamlarında kullanılacak AWS kaynakları parametrik olarak oluşturuldu.
+
+Başlıca kaynaklar:
+
+- Amazon S3
+- AWS Lambda
+- Lambda Layer
+- Amazon EventBridge
+- Amazon VPC
+- Private Subnet
+- Route Table
+- Security Group
+- S3 Gateway VPC Endpoint
+- Lambda Permission
+- Amazon RDS MySQL
+
+Template içerisinde `AWS SAM` kullanıldığı için özellikle Lambda ve Layer tanımları daha sade bir yapıda oluşturuldu.
+
+Örneğin crawler Lambda şu şekilde tanımlandı:
+
+```yaml
+CrawlerFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    FunctionName:
+      Fn::Sub: "dfcp-v1-${Environment}-crawler"
+    Runtime: python3.12
+    Handler: src.lambda_function.lambda_handler
+    Timeout: 30
+
+    CodeUri:
+      Bucket:
+        Ref: DeploymentBucketName
+      Key: lambda/lambda-deploy.zip
+
+    Layers:
+      - Ref: RssLayer
+```
+Burada Lambda kaynak kodu doğrudan local dosyadan değil, daha önce oluşturulan deployment bucket içerisindeki ZIP paketinden alınmaktadır.
+
+Crawler'ın kullandığı RSS bağımlılıkları ise ayrı bir Lambda Layer olarak tanımlandı:
+
+```yaml
+RssLayer:
+  Type: AWS::Serverless::LayerVersion
+  Properties:
+    LayerName:
+      Fn::Sub: "dfcp-v1-${Environment}-rss-layer"
+    ContentUri:
+      Bucket:
+        Ref: DeploymentBucketName
+      Key: layer/rss-layer.zip
+    CompatibleRuntimes:
+      - python3.12
+```
+
+Aynı yaklaşım RDS Writer Lambda ve MySQL bağlantısı için kullanılan mysql-layer.zip paketi için de uygulandı.
+
+Kaynak isimlerinde Fn::Sub kullanılarak ortam bilgisi dinamik olarak eklendi:
+
+```text
+dfcp-v1-test-crawler
+dfcp-v1-prod-crawler
+
+dfcp-v1-test-rds-writer
+dfcp-v1-prod-rds-writer
+```
