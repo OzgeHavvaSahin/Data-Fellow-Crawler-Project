@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
-Description: DFCP V1 main infrastructure
+Description: DFCP V2 main infrastructure
 
 Parameters:
   Environment:
@@ -28,18 +28,31 @@ Parameters:
     Type: String
     Description: S3 bucket containing Lambda deployment packages
 
+  CrawlerCodeKey:
+    Type: String
+
+  RdsWriterCodeKey:
+    Type: String
+
+  RssLayerKey:
+    Type: String
+
+  MysqlLayerKey:
+    Type: String
+    
 Resources:
 
   RssLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName:
-        Fn::Sub: "dfcp-v1-${Environment}-rss-layer"
+        Fn::Sub: "dfcp-v2-${Environment}-rss-layer"
       Description: Rss crawler dependency layer
       ContentUri:
         Bucket:
           Ref: DeploymentBucketName
-        Key: layer/rss-layer.zip
+        Key: 
+          Ref: RssLayerKey
       CompatibleRuntimes:
         - python3.12
 
@@ -47,7 +60,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: "dfcp-v1-${Environment}-crawler"
+        Fn::Sub: "dfcp-v2-${Environment}-crawler"
       Runtime: python3.12
       Handler: src.lambda_function.lambda_handler
       Timeout: 30
@@ -55,7 +68,8 @@ Resources:
       CodeUri:
         Bucket:
           Ref: DeploymentBucketName
-        Key: lambda/lambda-deploy.zip
+        Key: 
+          Ref: CrawlerCodeKey
 
       Layers:
         - Ref: RssLayer
@@ -86,7 +100,7 @@ Resources:
       - RdsWriterS3InvokePermission
     Properties:
       BucketName:
-        Fn::Sub: "dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"
+        Fn::Sub: "dfcp-v2-${Environment}-news-${AWS::AccountId}-${AWS::Region}"
 
       NotificationConfiguration:
         LambdaConfigurations:
@@ -100,12 +114,13 @@ Resources:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName:
-        Fn::Sub: "dfcp-v1-${Environment}-mysql-layer"
+        Fn::Sub: "dfcp-v2-${Environment}-mysql-layer"
       Description: PyMySQL dependency layer
       ContentUri:
         Bucket:
           Ref: DeploymentBucketName
-        Key: layer/mysql-layer.zip
+        Key: 
+          Ref: MysqlLayerKey
       CompatibleRuntimes:
         - python3.12
 
@@ -113,7 +128,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: "dfcp-v1-${Environment}-rds-writer"
+        Fn::Sub: "dfcp-v2-${Environment}-rds-writer"
 
       Runtime: python3.12
       Handler: lambda_function.lambda_handler
@@ -122,7 +137,8 @@ Resources:
       CodeUri:
         Bucket:
           Ref: DeploymentBucketName
-        Key: lambda/rds-writer-deploy.zip
+        Key:
+          Ref: RdsWriterCodeKey
 
       Layers:
         - Ref: MysqlLayer  
@@ -134,7 +150,7 @@ Resources:
               Action:
                 - s3:GetObject
               Resource:
-                Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}/*"
+                Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v2-${Environment}-news-${AWS::AccountId}-${AWS::Region}/*"
             
       Environment:
         Variables:
@@ -171,7 +187,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-vpc" 
+            Fn::Sub: "dfcp-v2-${Environment}-vpc" 
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -186,7 +202,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-private-subnet-1"
+            Fn::Sub: "dfcp-v2-${Environment}-private-subnet-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -201,7 +217,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-private-subnet-2"
+            Fn::Sub: "dfcp-v2-${Environment}-private-subnet-2"
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -211,7 +227,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-private-rt"
+            Fn::Sub: "dfcp-v2-${Environment}-private-rt"
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -238,7 +254,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-rds-writer-sg"
+            Fn::Sub: "dfcp-v2-${Environment}-rds-writer-sg"
 
   RdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -255,7 +271,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: "dfcp-v1-${Environment}-rds-sg"   
+            Fn::Sub: "dfcp-v2-${Environment}-rds-sg"   
 
   S3VpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -276,13 +292,13 @@ Resources:
         - Ref: PrivateSubnet1
         - Ref: PrivateSubnet2
       DBSubnetGroupName:
-        Fn::Sub: "dfcp-v1-${Environment}-db-subnet-group"
+        Fn::Sub: "dfcp-v2-${Environment}-db-subnet-group"
 
   RdsDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier:
-        Fn::Sub: "dfcp-v1-${Environment}-mysql"
+        Fn::Sub: "dfcp-v2-${Environment}-mysql"
 
       Engine: mysql
       DBInstanceClass: db.t3.micro
@@ -325,4 +341,4 @@ Resources:
       SourceAccount:
         Ref: AWS::AccountId
       SourceArn:
-        Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v1-${Environment}-news-${AWS::AccountId}-${AWS::Region}"      
+        Fn::Sub: "arn:${AWS::Partition}:s3:::dfcp-v2-${Environment}-news-${AWS::AccountId}-${AWS::Region}"      

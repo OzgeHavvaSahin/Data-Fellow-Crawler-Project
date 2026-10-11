@@ -1,0 +1,82 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "===== INSTALL PHASE ====="
+      - python --version
+      - aws --version
+      - zip -v | head -1
+
+  pre_build:
+    commands:
+      - echo "===== PRE BUILD PHASE ====="
+      - echo "Environment=$ENVIRONMENT"
+      - echo "Build number=$CODEBUILD_BUILD_NUMBER"
+      - echo "Deployment bucket=$DEPLOYMENT_BUCKET"
+
+      - export CRAWLER_ZIP="lambda/crawler-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export RDS_WRITER_ZIP="lambda/rds-writer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export RSS_LAYER_ZIP="layer/rss-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export MYSQL_LAYER_ZIP="layer/mysql-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+
+  build:
+    commands:
+      - echo "===== BUILD CRAWLER LAMBDA ====="
+      - cd data_fellow
+      - zip -r crawler.zip src -x "*/__pycache__/*" "*.pyc"
+      - cd ..
+
+      - echo "===== BUILD RDS WRITER LAMBDA ====="
+      - cd rds-writer
+      - zip -r ../rds-writer.zip lambda_function.py database.py s3_reader.py
+      - cd ..
+
+      - echo "===== BUILD RSS LAYER ====="
+      - rm -rf build_rss_layer
+      - mkdir -p build_rss_layer/python
+      - pip install requests -t build_rss_layer/python
+      - cd build_rss_layer
+      - zip -r ../rss-layer.zip python
+      - cd ..
+
+      - echo "===== BUILD MYSQL LAYER ====="
+      - rm -rf build_mysql_layer
+      - mkdir -p build_mysql_layer/python
+      - pip install pymysql -t build_mysql_layer/python
+      - cd build_mysql_layer
+      - zip -r ../mysql-layer.zip python
+      - cd ..
+
+      - echo "===== UPLOAD ARTIFACTS TO S3 ====="
+      - aws s3 cp data_fellow/crawler.zip "s3://${DEPLOYMENT_BUCKET}/${CRAWLER_ZIP}"
+      - aws s3 cp rds-writer.zip "s3://${DEPLOYMENT_BUCKET}/${RDS_WRITER_ZIP}"
+      - aws s3 cp rss-layer.zip "s3://${DEPLOYMENT_BUCKET}/${RSS_LAYER_ZIP}"
+      - aws s3 cp mysql-layer.zip "s3://${DEPLOYMENT_BUCKET}/${MYSQL_LAYER_ZIP}"
+
+  post_build:
+    commands:
+      - echo "===== GENERATE CLOUDFORMATION PARAMETERS ====="
+
+      - |
+        cat > pipeline-parameters.json <<EOF
+        {
+          "Parameters": {
+            "Environment": "${ENVIRONMENT}",
+            "DeploymentBucketName": "${DEPLOYMENT_BUCKET}",
+            "CrawlerCodeKey": "${CRAWLER_ZIP}",
+            "RdsWriterCodeKey": "${RDS_WRITER_ZIP}",
+            "RssLayerKey": "${RSS_LAYER_ZIP}",
+            "MysqlLayerKey": "${MYSQL_LAYER_ZIP}"
+          }
+        }
+        EOF
+
+      - cat pipeline-parameters.json
+      - echo "===== BUILD COMPLETED ====="
+
+artifacts:
+  files:
+    - data_fellow/architecture/sam_template.yaml
+    - pipeline-parameters.json
+  discard-paths: yes
