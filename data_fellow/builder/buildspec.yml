@@ -11,20 +11,20 @@ phases:
   pre_build:
     commands:
       - echo "===== PRE BUILD PHASE ====="
-      - echo "Environment=$ENVIRONMENT"
-      - echo "Build number=$CODEBUILD_BUILD_NUMBER"
-      - echo "Deployment bucket=$DEPLOYMENT_BUCKET"
+      - echo "Environment: $ENVIRONMENT"
+      - echo "Build number: $CODEBUILD_BUILD_NUMBER"
+      - echo "Deployment bucket: $DEPLOYMENT_BUCKET"
 
-      - export CRAWLER_ZIP="lambda/crawler-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
-      - export RDS_WRITER_ZIP="lambda/rds-writer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
-      - export RSS_LAYER_ZIP="layer/rss-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
-      - export MYSQL_LAYER_ZIP="layer/mysql-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export CRAWLER_ZIP_KEY="lambda/crawler-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export RDS_WRITER_ZIP_KEY="lambda/rds-writer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export RSS_LAYER_ZIP_KEY="layer/rss-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
+      - export MYSQL_LAYER_ZIP_KEY="layer/mysql-layer-${ENVIRONMENT}-${CODEBUILD_BUILD_NUMBER}.zip"
 
   build:
     commands:
       - echo "===== BUILD CRAWLER LAMBDA ====="
       - cd data_fellow
-      - zip -r crawler.zip src -x "*/__pycache__/*" "*.pyc"
+      - zip -r ../crawler.zip src -x "*/__pycache__/*" "*.pyc"
       - cd ..
 
       - echo "===== BUILD RDS WRITER LAMBDA ====="
@@ -48,11 +48,11 @@ phases:
       - zip -r ../mysql-layer.zip python
       - cd ..
 
-      - echo "===== UPLOAD ARTIFACTS TO S3 ====="
-      - aws s3 cp data_fellow/crawler.zip "s3://${DEPLOYMENT_BUCKET}/${CRAWLER_ZIP}"
-      - aws s3 cp rds-writer.zip "s3://${DEPLOYMENT_BUCKET}/${RDS_WRITER_ZIP}"
-      - aws s3 cp rss-layer.zip "s3://${DEPLOYMENT_BUCKET}/${RSS_LAYER_ZIP}"
-      - aws s3 cp mysql-layer.zip "s3://${DEPLOYMENT_BUCKET}/${MYSQL_LAYER_ZIP}"
+      - echo "===== UPLOAD TO S3 ====="
+      - aws s3 cp crawler.zip "s3://${DEPLOYMENT_BUCKET}/${CRAWLER_ZIP_KEY}"
+      - aws s3 cp rds-writer.zip "s3://${DEPLOYMENT_BUCKET}/${RDS_WRITER_ZIP_KEY}"
+      - aws s3 cp rss-layer.zip "s3://${DEPLOYMENT_BUCKET}/${RSS_LAYER_ZIP_KEY}"
+      - aws s3 cp mysql-layer.zip "s3://${DEPLOYMENT_BUCKET}/${MYSQL_LAYER_ZIP_KEY}"
 
   post_build:
     commands:
@@ -64,10 +64,10 @@ phases:
           "Parameters": {
             "Environment": "${ENVIRONMENT}",
             "DeploymentBucketName": "${DEPLOYMENT_BUCKET}",
-            "CrawlerCodeKey": "${CRAWLER_ZIP}",
-            "RdsWriterCodeKey": "${RDS_WRITER_ZIP}",
-            "RssLayerKey": "${RSS_LAYER_ZIP}",
-            "MysqlLayerKey": "${MYSQL_LAYER_ZIP}"
+            "CrawlerCodeKey": "${CRAWLER_ZIP_KEY}",
+            "RdsWriterCodeKey": "${RDS_WRITER_ZIP_KEY}",
+            "RssLayerKey": "${RSS_LAYER_ZIP_KEY}",
+            "MysqlLayerKey": "${MYSQL_LAYER_ZIP_KEY}"
           }
         }
         EOF
