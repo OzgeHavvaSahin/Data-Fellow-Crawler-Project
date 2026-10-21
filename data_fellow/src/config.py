@@ -13,5 +13,5 @@ URLS = {
     "science_and_tech": "https://news.google.com/rss/topics/CAAqKAgKIiJDQkFTRXdvSkwyMHZNR1ptZHpWbUVnSjBjaG9DVkZJb0FBUAE?hl=tr&gl=TR&ceid=TR%3Atr",
 }
 
-S3_BUCKET = os.getenv("S3_BUCKET")
-AWS_REGION = os.getenv("AWS_REGION")
+S3_BUCKET = "data-fellow-athena-news"
+AWS_REGION = "eu-north-1"
