@@ -222,3 +222,8 @@ lambda_layer/*.zip
 
 mysql_layer/python/
 mysql_layer/*.zip
+
+
+# Athena'dan indirilen CSV dosyalari
+dfcp-analysis/csv/
+dfcp-analysis/*.csv
